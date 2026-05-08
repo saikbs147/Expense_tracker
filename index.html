@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head></head>
+<body>
+<script>
+const STORAGE_KEY = 'expense_tracker_data';
+
+function loadExpenses() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveExpenses(expenses) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+}
+
+window['ai_edge_gallery_get_result'] = async (data) => {
+  try {
+    const json = JSON.parse(data);
+    const action = (json.action || 'view').toLowerCase();
+    let expenses = loadExpenses();
+
+    if (action === 'clear') {
+      saveExpenses([]);
+      return JSON.stringify({ result: 'All expenses have been cleared.' });
+    }
+
+    if (action === 'add') {
+      const category = (json.category || 'Other').trim();
+      const amount = parseFloat(json.amount);
+      if (isNaN(amount) || amount <= 0) {
+        return JSON.stringify({ error: 'Invalid amount provided.' });
+      }
+      const entry = {
+        id: Date.now(),
+        date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+        category: category.charAt(0).toUpperCase() + category.slice(1),
+        amount: amount,
+        note: json.note || ''
+      };
+      expenses.push(entry);
+      saveExpenses(expenses);
+
+      const total = expenses.reduce((s, e) => s + e.amount, 0);
+      const encoded = encodeURIComponent(JSON.stringify(expenses));
+      return JSON.stringify({
+        result: `Added ₹${amount} for ${entry.category}. Total so far: ₹${total.toFixed(2)} across ${expenses.length} expense(s).`,
+        webview: {
+          url: 'webview.html?data=' + encoded,
+          aspectRatio: 1.5
+        }
+      });
+    }
+
+    // action === 'view'
+    if (expenses.length === 0) {
+      return JSON.stringify({ result: 'No expenses recorded yet. Add some with "food - 150" or "travel - 200".' });
+    }
+    const total = expenses.reduce((s, e) => s + e.amount, 0);
+    const encoded = encodeURIComponent(JSON.stringify(expenses));
+    return JSON.stringify({
+      result: `You have ${expenses.length} expense(s) totalling ₹${total.toFixed(2)}.`,
+      webview: {
+        url: 'webview.html?data=' + encoded,
+        aspectRatio: 1.5
+      }
+    });
+
+  } catch (e) {
+    return JSON.stringify({ error: 'Failed: ' + e.message });
+  }
+};
+</script>
+</body>
+</html>
